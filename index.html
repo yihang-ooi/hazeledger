@@ -500,7 +500,7 @@ $("#cal").addEventListener("mousemove",ev=>{const h=calHit(ev);if(!h)return hide
   const note=x!==x?"Satellite not yet flying":view==="harm"?(d<META.s0?"rebuilt from MODIS":"observed by VIIRS"):view==="naive"?(d<META.s0?"MODIS count":"VIIRS count"):view==="modis"?"MODIS count":"VIIRS count";
   showTip(ev,`<b>${dateLabel(d)}</b><br>${x===x?fmt(x)+" detections":""}<br>${note}`)});
 $("#cal").addEventListener("mouseleave",hideTip);
-$("#cal").addEventListener("click",ev=>{const h=calHit(ev);if(!h)return;spaceDay=h.e?h.e.pk:h.d;drawCal();loadSpace()});
+$("#cal").addEventListener("click",ev=>{const h=calHit(ev);if(!h)return;spaceDay=h.e?h.e.pk:h.d;spaceSat=null;drawCal();loadSpace()});
 
 /* ---------- this month against normal ---------- */
 function daySpan(y,m){const a=Math.round((Date.UTC(y,m,1)-EPOCH)/864e5),b=Math.round((Date.UTC(y,m+1,0)-EPOCH)/864e5);return [a,b]}
@@ -649,6 +649,7 @@ function fillSearch(){const dl=$("#places");dl.innerHTML="";REG.filter(r=>r.leve
 $("#search").addEventListener("change",e=>{const q=e.target.value.trim().toLowerCase();const r=REG.find(r=>(r.level===2?`${r.name}, ${BYID[r.parent].name}`:r.name).toLowerCase()===q)||REG.find(r=>r.level>=1&&r.name.toLowerCase().startsWith(q));if(r&&series(r.id)){select(r.id);e.target.value=""}});
 function buildMap(){
   const svg=$("#map");GEO.features.forEach(f=>PATHS[f.properties.id]=pathOf(f.geometry));
+  REG.filter(r=>r.level===0).forEach(r=>{const mem=REG.filter(x=>x.level===1&&(r.name==="Whole region"||x.parent===r.id||(BYID[x.parent]&&r.name.startsWith("Borneo")&&/Kalimantan|Malaysian Borneo/.test(BYID[x.parent].name))));PATHS[r.id]=mem.map(x=>PATHS[x.id]||"").join("")});
   const land=S("svg",{viewBox:"0 0 1000 540",style:"position:absolute;inset:0;height:100%"});REG.filter(r=>r.level===1).forEach(r=>land.append(S("path",{class:"land",d:PATHS[r.id]})));$("#mapbox").prepend(land);
   const g1=S("g",{id:"g1"}),g2=S("g",{id:"g2"}),gs=S("g",{id:"gsel"});svg.append(g1,g2,gs);
   REG.filter(r=>r.level===1).forEach(r=>{const p=S("path",{class:"reg",d:PATHS[r.id]});p.addEventListener("click",()=>{if(cur===r.id||BYID[cur]?.parent===r.id)showL2(r.id,true);else select(r.id)});hov(p,()=>`<b>${r.name}</b><br>${r.country}`);g1.append(p)});
@@ -708,21 +709,33 @@ function initDraw(){
 }
 
 /* ---------- NASA imagery for a chosen day ---------- */
+let spaceSat=null;
+function satOptions(d){
+  const o=[];
+  if(d>=Math.round((Date.UTC(2016,0,1)-EPOCH)/864e5)){const n20=d>META.s_end;o.push({id:"viirs",name:n20?"VIIRS NOAA-20":"VIIRS Suomi NPP",btn:"VIIRS, afternoon",base:n20?"VIIRS_NOAA20_CorrectedReflectance_TrueColor":"VIIRS_SNPP_CorrectedReflectance_TrueColor",fires:n20?"VIIRS_NOAA20_Thermal_Anomalies_375m_All":"VIIRS_SNPP_Thermal_Anomalies_375m_All"})}
+  if(d>=META.a0)o.push({id:"aqua",name:"MODIS Aqua",btn:"MODIS Aqua, afternoon",base:"MODIS_Aqua_CorrectedReflectance_TrueColor",fires:"MODIS_Aqua_Thermal_Anomalies_All"});
+  o.push({id:"terra",name:"MODIS Terra",btn:"MODIS Terra, morning",base:"MODIS_Terra_CorrectedReflectance_TrueColor",fires:"MODIS_Terra_Thermal_Anomalies_All"});
+  return o;
+}
 function loadSpace(){
-  const host=$("#space"),d=spaceDay,date=iso(d),aqua=d>=META.a0;
-  const layer=aqua?"MODIS_Aqua_CorrectedReflectance_TrueColor":"MODIS_Terra_CorrectedReflectance_TrueColor";
-  const fires=aqua?"MODIS_Aqua_Thermal_Anomalies_All":"MODIS_Terra_Thermal_Anomalies_All";
-  const base=`https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/jpeg&WIDTH=1200&HEIGHT=648&CRS=EPSG:4326&BBOX=${G.S},${G.W},${G.N},${G.E}&TIME=${date}&LAYERS=`;
+  const host=$("#space"),d=spaceDay,date=iso(d),opts=satOptions(d);
+  const first=opts.find(o=>o.id===spaceSat)||opts[0],order=[first,...opts.filter(o=>o!==first)];
+  const url=l=>`https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/jpeg&WIDTH=1200&HEIGHT=648&CRS=EPSG:4326&BBOX=${G.S},${G.W},${G.N},${G.E}&TIME=${date}&LAYERS=${l}`;
+  const tries=[];order.forEach(o=>{tries.push([o,url(o.base+","+o.fires),true]);tries.push([o,url(o.base),false])});
+  const wv=`https://worldview.earthdata.nasa.gov/?v=${G.W},${G.S},${G.E},${G.N}&t=${date}`;
   host.innerHTML=`<div class="msg">Loading NASA imagery for ${dateLabel(d)}.</div>`;
-  const img=new Image();img.alt=`NASA satellite image of the region on ${dateLabel(d)}`;
-  let tried=false;
-  img.onload=()=>{host.innerHTML="";host.append(img);const svg=S("svg",{viewBox:"0 0 1000 540",preserveAspectRatio:"none"});if(PATHS[cur])svg.append(S("path",{d:PATHS[cur]}));host.append(svg)};
-  img.onerror=()=>{if(!tried){tried=true;img.src=base+layer}else host.innerHTML=`<div class="msg">NASA's image server did not answer. <a style="margin-left:6px" target="_blank" rel="noopener" href="https://worldview.earthdata.nasa.gov/?v=${G.W},${G.S},${G.E},${G.N}&t=${date}">Open this day in NASA Worldview</a></div>`};
-  img.src=base+layer+","+fires;
+  const img=new Image();img.alt=`NASA satellite image of the region on ${dateLabel(d)}`;let k=0;
+  const caption=(o,withFires)=>{
+    const cap=$("#spacecap");cap.innerHTML=`True-colour image${withFires?" and fire pixels":""} from <b>${o.name}</b>, served live by NASA GIBS. Grey-brown veils are smoke; white is cloud. A black band is a gap between two orbits: try another satellite. <a target="_blank" rel="noopener" href="${wv}">Open in NASA Worldview</a><br>`;
+    const row=document.createElement("span");row.className="chips";row.style.cssText="display:inline-flex;margin:8px 0 0";
+    opts.forEach(q=>{const b=document.createElement("button");b.className="chip";b.textContent=q.btn;b.setAttribute("aria-pressed",q===o);b.onclick=()=>{spaceSat=q.id;loadSpace()};row.append(b)});cap.append(row)};
+  img.onload=()=>{if(d!==spaceDay)return;host.innerHTML="";host.append(img);const svg=S("svg",{viewBox:"0 0 1000 540",preserveAspectRatio:"none"});if(PATHS[cur])svg.append(S("path",{d:PATHS[cur]}));host.append(svg);caption(tries[k][0],tries[k][2])};
+  img.onerror=()=>{k++;if(k<tries.length)img.src=tries[k][1];else{host.innerHTML=`<div class="msg">NASA's image server did not answer. <a style="margin-left:6px" target="_blank" rel="noopener" href="${wv}">Open this day in NASA Worldview</a></div>`;$("#spacecap").textContent=""}};
+  img.src=tries[0][1];
   const s=series(cur);
   $("#spacetitle").textContent=`${dateLabel(d)}, from space`;
   $("#spacesub").innerHTML=`${BYID[cur].name} outlined in white. The record shows <b>${fmt(s.H[d])}</b> VIIRS-equivalent detections here on this day${d===stats(cur).peakDay?", its single worst day":""}.`;
-  $("#spacecap").innerHTML=`True-colour image and fire pixels from ${aqua?"MODIS Aqua":"MODIS Terra"}, served live by NASA GIBS. Grey-brown veils are smoke; white is cloud. <a target="_blank" rel="noopener" href="https://worldview.earthdata.nasa.gov/?v=${G.W},${G.S},${G.E},${G.N}&t=${date}">Open in NASA Worldview</a>`;
+  $("#spacecap").textContent="";
 }
 
 /* ---------- evidence ---------- */
