@@ -344,7 +344,7 @@ async function boot(){
   for(let d=0;d<D;d++){const t=new Date(EPOCH+d*864e5);const y=t.getUTCFullYear();DAY.push({y,m:t.getUTCMonth(),dom:t.getUTCDate(),doy:Math.round((t-Date.UTC(y,0,1))/864e5)})}
   if(META.synthetic)$("#sample").style.display="block";
   const kall=(META.model.k_regional.tot_all??META.model.k_regional.D_all);
-  $("#herotext").innerHTML=`NASA has counted fires with MODIS since ${META.t0_date.slice(0,4)} and with the sharper VIIRS since ${META.s0_date.slice(0,4)}. Here VIIRS reports about <b>${kall.toFixed(1)} times</b> as many fires for the same burning, so the two records cannot be compared directly. HazeLedger joins them into one burning calendar, ${META.t0_date.slice(0,4)} to ${dateLabel(D-1)}, so anyone managing fire, land or haze can set this month against a 26 years of history.`;
+  $("#herotext").innerHTML=`NASA has counted fires with MODIS since ${META.t0_date.slice(0,4)} and with the sharper VIIRS since ${META.s0_date.slice(0,4)}. Here VIIRS reports about <b>${kall.toFixed(1)} times</b> as many fires for the same burning, so the two records cannot be compared directly. HazeLedger joins them into one burning calendar, ${META.t0_date.slice(0,4)} to ${dateLabel(D-1)}, so anyone managing fire, land or haze can set this month against 26 years of history.`;
   range={a:META.t0,b:D-1};
   const fi=$("#from"),ti=$("#to");fi.min=ti.min=iso(META.t0);fi.max=ti.max=iso(D-1);fi.value=iso(range.a);ti.value=iso(range.b);
   const setRange=()=>{let a=Math.round((Date.parse(fi.value)-EPOCH)/864e5),b=Math.round((Date.parse(ti.value)-EPOCH)/864e5);if(!(a===a)||!(b===b))return;a=Math.max(META.t0,Math.min(D-1,a));b=Math.max(META.t0,Math.min(D-1,b));if(a>b)[a,b]=[b,a];range={a,b};render()};
@@ -413,6 +413,7 @@ function stats(id){
   st.median=sorted[Math.floor(sorted.length/2)];st.worst=FY[H.indexOf(Math.max(...H))];st.max=Math.max(...H);
   st.trend={harm:trend(FY,H),naive:trend(FY,FY.map(y=>st.naive.ann[y]))};
   let pk=0;for(let d=0;d<D;d++)if(s.H[d]>s.H[pk])pk=d;st.peakDay=pk;
+  const d16=Math.round((Date.UTC(2016,0,1)-EPOCH)/864e5);let pr=d16;for(let d=d16;d<D;d++)if(s.H[d]>s.H[pr])pr=d;st.peakRecent=s.H[pr]>0?pr:pk;
   st.monMax=Math.max(10,...FY.map(y=>Math.max(...mon[y])));
   const nz=[];for(let d=META.s0;d<D;d++)if(s.H[d]>0)nz.push(s.H[d]);nz.sort((a,b)=>a-b);
   st.scale=Math.max(4,nz.length?nz[Math.floor(nz.length*0.995)]:4);
@@ -430,7 +431,7 @@ function dateLabel(d){const q=DAY[d];return q.dom+" "+MON[q.m]+" "+q.y}
 function iso(d){return new Date(EPOCH+d*864e5).toISOString().slice(0,10)}
 
 function select(id){
-  if(!series(id))return; cur=id; spaceDay=stats(id).peakDay; render(); updateMapSel(); loadSpace();
+  if(!series(id))return; cur=id; spaceDay=stats(id).peakRecent; spaceSat=null; render(); updateMapSel(); loadSpace();
 }
 function render(){
   if(cur==null)return;const r=BYID[cur],st=stats(cur);
@@ -446,7 +447,7 @@ function render(){
   const stepM=mean(META.full_years.filter(y=>y>=2012).map(y=>st.modis.ann[y]))/Math.max(1e-9,mean(META.full_years.filter(y=>y>=2003&&y<2012).map(y=>st.modis.ann[y])));
   $("#viewnote").innerHTML={
     naive:`<b>This is what the raw archive looks like.</b> MODIS counts until ${META.s0_date.slice(0,4)}, VIIRS counts after. The average year ${step>=1?"jumps":"changes"} <b>${step.toFixed(1)}×</b> at the join. MODIS alone, over the same years, changed ${stepM.toFixed(2)}×. The difference is the satellite, not the fires.`,
-    harm:`<b>One unit for all ${META.full_years.length} years:</b> what VIIRS would have reported. Years before ${META.s0_date.slice(0,4)} are rebuilt from MODIS with a local correction factor. Across the join the average year changes <b>${stepH.toFixed(2)}×</b>, in step with MODIS alone (${stepM.toFixed(2)}×), which never changed sensors. Raw stitched counts claim ${step.toFixed(1)}×.`,
+    harm:`<b>One unit for the whole record:</b> what VIIRS would have reported. Years before ${META.s0_date.slice(0,4)} are rebuilt from MODIS with a local correction factor. Across the join the average year changes <b>${stepH.toFixed(2)}×</b>, in step with MODIS alone (${stepM.toFixed(2)}×), which never changed sensors. Raw stitched counts claim ${step.toFixed(1)}×.`,
     modis:`<b>MODIS alone</b> (Terra and Aqua, 1 km pixels). Consistent, but it misses small and smouldering fires, and both satellites retire in 2027.`,
     viirs:`<b>VIIRS alone</b> (Suomi NPP, 375 m pixels${META.j_fill_from?", continued by NOAA-20 after "+dateLabel(META.s_end):""}). Sharper, but it has no memory before ${dateLabel(META.s0)}.`}[view];
   drawCal();drawNow();drawAnnual();drawSeason();drawAnom();drawRecord();drawSearch();drawLoyo();
@@ -555,30 +556,33 @@ function downloadPng(){$("#cal").toBlob(b=>save(b,slug()+"_calendar_"+mode+".png
 
 /* ---------- annual bars ---------- */
 function drawAnnual(){
-  const st=stats(cur),FY=META.full_years,r=BYID[cur],W=720,Hh=400,ml=56,mr=10,mt=18,mb=26,host=$("#annual");host.innerHTML="";
+  const st=stats(cur),FY=META.full_years,PY=partYear(),YS=PY?[...FY,PY]:FY,ser=series(cur),ann=(v,y)=>y===PY?partAnn(ser,v,y):st[v].ann[y],r=BYID[cur],W=720,Hh=400,ml=56,mr=10,mt=18,mb=26,host=$("#annual");host.innerHTML="";
   const svg=S("svg",{viewBox:`0 0 ${W} ${Hh}`,role:"img","aria-label":"Annual detections"});host.append(svg);
-  const sig0=r.sigma_log||0.3,ti=META.terra_inflation||1,sigY=y=>y<=2001?sig0*ti:y===2002?sig0*(1+ti)/2:sig0,vals=FY.map(y=>st[view].ann[y]);
-  const hi=FY.map((y,i)=>view==="harm"&&y<DAY[META.s0].y?vals[i]*Math.exp(1.645*sigY(y)):vals[i]);
-  const allmax=Math.max(...FY.map((y,i)=>Math.max(st.harm.ann[y]*(y<DAY[META.s0].y?Math.exp(1.645*sigY(y)):1),st.naive.ann[y]||0)),1);
-  const ymax=nice(allmax),bw=(W-ml-mr)/FY.length,ys=v=>mt+(Hh-mt-mb)*(1-v/ymax);
+  const sig0=r.sigma_log||0.3,ti=META.terra_inflation||1,sigY=y=>y<=2001?sig0*ti:y===2002?sig0*(1+ti)/2:sig0,vals=YS.map(y=>ann(view,y));
+  const hi=YS.map((y,i)=>view==="harm"&&y<DAY[META.s0].y?vals[i]*Math.exp(1.645*sigY(y)):vals[i]);
+  const allmax=Math.max(...YS.map(y=>Math.max((ann("harm",y)||0)*(y<DAY[META.s0].y?Math.exp(1.645*sigY(y)):1),ann("naive",y)||0)),1);
+  const ymax=nice(allmax),bw=(W-ml-mr)/YS.length,ys=v=>mt+(Hh-mt-mb)*(1-v/ymax);
   for(let i=0;i<=4;i++){const v=ymax*i/4;svg.append(S("line",{class:"gridl",x1:ml,x2:W-mr,y1:ys(v),y2:ys(v)}),S("text",{x:ml-8,y:ys(v)+4,"text-anchor":"end"},fmt0.format(v)))}
   const top=[...vals.map((v,i)=>[v||0,i])].sort((a,b)=>b[0]-a[0]).slice(0,3).map(a=>a[1]);
-  FY.forEach((y,i)=>{const v=vals[i],x=ml+i*bw+bw*0.14,w=bw*0.72,pre=y<DAY[META.s0].y;
-    if(i%2===0||FY.length<16)svg.append(S("text",{x:ml+i*bw+bw/2,y:Hh-8,"text-anchor":"middle"},"’"+String(y).slice(2)));
+  YS.forEach((y,i)=>{const v=vals[i],x=ml+i*bw+bw*0.14,w=bw*0.72,pre=y<DAY[META.s0].y,part=y===PY;
+    if((i%2===0&&!(PY&&i===YS.length-2))||YS.length<16||part)svg.append(S("text",{x:ml+i*bw+bw/2,y:Hh-8,"text-anchor":"middle"},"’"+String(y).slice(2)));
     if(!(v===v))return;
     const col=view==="harm"?(pre?"#e9a56a":"#9c3813"):view==="naive"?(pre?"var(--modis)":"var(--viirs)"):view==="modis"?"var(--modis)":"var(--viirs)";
-    const h=Math.max(0,ys(0)-ys(v));const bar=S("path",{d:`M${x},${ys(0)}V${ys(v)+Math.min(3,h)}q0,-${Math.min(3,h)} ${Math.min(3,h)},-${Math.min(3,h)}H${x+w-Math.min(3,h)}q${Math.min(3,h)},0 ${Math.min(3,h)},${Math.min(3,h)}V${ys(0)}Z`,fill:col});
+    const h=Math.max(0,ys(0)-ys(v));const bar=S("path",{d:`M${x},${ys(0)}V${ys(v)+Math.min(3,h)}q0,-${Math.min(3,h)} ${Math.min(3,h)},-${Math.min(3,h)}H${x+w-Math.min(3,h)}q${Math.min(3,h)},0 ${Math.min(3,h)},${Math.min(3,h)}V${ys(0)}Z`,fill:col});if(part){bar.setAttribute("fill-opacity",".45");bar.setAttribute("stroke",col);bar.setAttribute("stroke-width","1.5");bar.setAttribute("stroke-dasharray","4 3")}
     svg.append(bar);
     if(view==="harm"&&pre&&v>0){const lo=v*Math.exp(-1.645*sigY(y)),h2=v*Math.exp(1.645*sigY(y));svg.append(S("line",{x1:x+w/2,x2:x+w/2,y1:ys(lo),y2:ys(h2),stroke:"#14211b","stroke-width":1.2}),S("line",{x1:x+w/2-3,x2:x+w/2+3,y1:ys(h2),y2:ys(h2),stroke:"#14211b","stroke-width":1.2}),S("line",{x1:x+w/2-3,x2:x+w/2+3,y1:ys(lo),y2:ys(lo),stroke:"#14211b","stroke-width":1.2}))}
     if(top.includes(i)&&v>0&&!top.some(j=>Math.abs(j-i)===1&&vals[j]>v))svg.append(S("text",{class:"lab",x:x+w/2,y:Math.max(11,ys(hi[i])-5),"text-anchor":"middle"},compact(v)));
     const hit=S("rect",{x:ml+i*bw,y:mt,width:bw,height:Hh-mt-mb,fill:"transparent"});svg.append(hit);
-    hov(hit,()=>`<b>${y}</b><br>${fmt0.format(v)} detections (${VIEWLAB[view]})${view==="harm"&&pre?`<br>Rebuilt from MODIS. 90% range ${fmt0.format(v*Math.exp(-1.645*sigY(y)))} to ${fmt0.format(v*Math.exp(1.645*sigY(y)))}`:""}`)});
+    hov(hit,()=>`<b>${y}${part?" so far, to "+dateLabel(D-1):""}</b><br>${fmt0.format(v)} detections (${VIEWLAB[view]})${view==="harm"&&pre?`<br>Rebuilt from MODIS. 90% range ${fmt0.format(v*Math.exp(-1.645*sigY(y)))} to ${fmt0.format(v*Math.exp(1.645*sigY(y)))}`:""}`)});
   const jx=ml+FY.indexOf(DAY[META.s0].y)*bw;if(jx>ml)svg.append(S("line",{x1:jx,x2:jx,y1:mt-4,y2:Hh-mb,stroke:"#14211b","stroke-width":1,"stroke-dasharray":"5 3"}));
   svg.append(S("line",{class:"ax",x1:ml,x2:W-mr,y1:ys(0),y2:ys(0)}));
-  $("#annsub").innerHTML=view==="harm"?`VIIRS-equivalent detections per year. <span style="white-space:nowrap"><i class="sw" style="display:inline-block;width:11px;height:11px;border-radius:2px;background:#e9a56a;vertical-align:-1px"></i> rebuilt from MODIS, with 90% range</span> <span style="white-space:nowrap"><i class="sw" style="display:inline-block;width:11px;height:11px;border-radius:2px;background:#9c3813;vertical-align:-1px"></i> observed by VIIRS</span>`:
+  const pnote=PY?` <span style="white-space:nowrap">Dashed bar: ${PY} so far, to ${dateLabel(D-1)}.</span>`:"";
+  $("#annsub").innerHTML=(view==="harm"?`VIIRS-equivalent detections per year. <span style="white-space:nowrap"><i class="sw" style="display:inline-block;width:11px;height:11px;border-radius:2px;background:#e9a56a;vertical-align:-1px"></i> rebuilt from MODIS, with 90% range</span> <span style="white-space:nowrap"><i class="sw" style="display:inline-block;width:11px;height:11px;border-radius:2px;background:#9c3813;vertical-align:-1px"></i> observed by VIIRS</span>`:
     view==="naive"?`Raw detections per year. <span style="white-space:nowrap"><i class="sw" style="display:inline-block;width:11px;height:11px;border-radius:2px;background:var(--modis);vertical-align:-1px"></i> MODIS</span> <span style="white-space:nowrap"><i class="sw" style="display:inline-block;width:11px;height:11px;border-radius:2px;background:var(--viirs);vertical-align:-1px"></i> VIIRS</span>. Same vertical scale as the harmonised view.`:
-    `Raw detections per year from one sensor family. Same vertical scale as the harmonised view.`;
+    `Raw detections per year from one sensor family. Same vertical scale as the harmonised view.`)+pnote;
 }
+function partYear(){const y=DAY[D-1].y;return META.full_years.includes(y)?null:y}
+function partAnn(s,v,y){let t=0,any=false;for(let d=Math.max(0,Math.round((Date.UTC(y,0,1)-EPOCH)/864e5));d<D;d++){const x=val(s,d,v);if(x===x){t+=x;any=true}}return any?t:NaN}
 function nice(v){const p=Math.pow(10,Math.floor(Math.log10(v))),f=v/p;return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*p}
 
 /* ---------- seasonal profile ---------- */
@@ -606,15 +610,18 @@ function drawSeason(){
 
 /* ---------- unusual months ---------- */
 function drawAnom(){
-  const st=stats(cur),FY=META.full_years,W=560,ml=40,mt=18,cw=(W-ml-4)/12,rh=FY.length>22?11:13,Hh=mt+FY.length*rh+4,host=$("#anom");host.innerHTML="";
+  const st=stats(cur),s=series(cur),FY=META.full_years,PY=partYear(),YS=PY?[...FY,PY]:FY,W=560,ml=40,mt=18,cw=(W-ml-4)/12,rh=YS.length>22?11:13,Hh=mt+YS.length*rh+4,host=$("#anom");host.innerHTML="";
   const svg=S("svg",{viewBox:`0 0 ${W} ${Hh}`,role:"img"});host.append(svg);
   MON.forEach((m,i)=>svg.append(S("text",{x:ml+i*cw+cw/2,y:11,"text-anchor":"middle"},m)));
-  FY.forEach((y,j)=>{if(j%2===0)svg.append(S("text",{x:ml-8,y:mt+j*rh+rh-2.5,"text-anchor":"end"},y));
-    for(let m=0;m<12;m++){const p=st.rank[y][m],v=st.mon[y][m],tiny=v<1&&mean(FY.map(z=>st.mon[z][m]))<1;
+  YS.forEach((y,j)=>{const part=y===PY;if((j%2===0&&!(PY&&j===YS.length-2))||part)svg.append(S("text",part?{x:ml-8,y:mt+j*rh+rh-2.5,"text-anchor":"end",class:"lab"}:{x:ml-8,y:mt+j*rh+rh-2.5,"text-anchor":"end"},y));
+    for(let m=0;m<12;m++){let p,v;
+      if(part){const [a0,b0]=daySpan(y,m);if(b0>D-1)continue;v=sumH(s,a0,b0);p=FY.filter(z=>st.mon[z][m]<v).length/FY.length}
+      else{p=st.rank[y][m];v=st.mon[y][m]}
+      const tiny=v<1&&mean(FY.map(z=>st.mon[z][m]))<1;
       const col=tiny?"var(--mid)":p>=.9?"var(--warm2)":p>=.75?"var(--warm1)":p<=.1?"var(--cool2)":p<=.25?"var(--cool1)":"var(--mid)";
       const rc=S("rect",{x:ml+m*cw+1,y:mt+j*rh+1,width:cw-2,height:rh-2,rx:2,fill:col});svg.append(rc);
-      const hi=FY.filter(z=>st.mon[z][m]>v).length;
-      hov(rc,()=>`<b>${MON[m]} ${y}</b><br>${fmt0.format(v)} detections<br>${hi===0?`Highest ${MON[m]} in ${FY.length} years`:hi===FY.length-1?`Lowest ${MON[m]} in ${FY.length} years`:`Rank ${hi+1} of ${FY.length} for ${MON[m]}`}`)}});
+      const hi=FY.filter(z=>z!==y&&st.mon[z][m]>v).length,n=FY.length+(part?1:0);
+      hov(rc,()=>`<b>${MON[m]} ${y}</b><br>${fmt0.format(v)} detections<br>${hi===0?`Highest ${MON[m]} in ${n} years`:hi===n-1?`Lowest ${MON[m]} in ${n} years`:`Rank ${hi+1} of ${n} for ${MON[m]}`}`)}});
 }
 
 /* ---------- record card ---------- */
@@ -712,7 +719,7 @@ function initDraw(){
 let spaceSat=null;
 function satOptions(d){
   const o=[];
-  if(d>=Math.round((Date.UTC(2016,0,1)-EPOCH)/864e5)){const n20=d>META.s_end;o.push({id:"viirs",name:n20?"VIIRS NOAA-20":"VIIRS Suomi NPP",btn:"VIIRS, afternoon",base:n20?"VIIRS_NOAA20_CorrectedReflectance_TrueColor":"VIIRS_SNPP_CorrectedReflectance_TrueColor",fires:n20?"VIIRS_NOAA20_Thermal_Anomalies_375m_All":"VIIRS_SNPP_Thermal_Anomalies_375m_All"})}
+  if(d>=Math.round((Date.UTC(2016,0,1)-EPOCH)/864e5)){const n20=d>=Math.round((Date.UTC(2020,0,1)-EPOCH)/864e5);o.push({id:"viirs",name:n20?"VIIRS NOAA-20":"VIIRS Suomi NPP",btn:"VIIRS, afternoon",base:n20?"VIIRS_NOAA20_CorrectedReflectance_TrueColor":"VIIRS_SNPP_CorrectedReflectance_TrueColor",fires:n20?"VIIRS_NOAA20_Thermal_Anomalies_375m_All":"VIIRS_SNPP_Thermal_Anomalies_375m_All"})}
   if(d>=META.a0)o.push({id:"aqua",name:"MODIS Aqua",btn:"MODIS Aqua, afternoon",base:"MODIS_Aqua_CorrectedReflectance_TrueColor",fires:"MODIS_Aqua_Thermal_Anomalies_All"});
   o.push({id:"terra",name:"MODIS Terra",btn:"MODIS Terra, morning",base:"MODIS_Terra_CorrectedReflectance_TrueColor",fires:"MODIS_Terra_Thermal_Anomalies_All"});
   return o;
@@ -734,14 +741,14 @@ function loadSpace(){
   img.src=tries[0][1];
   const s=series(cur);
   $("#spacetitle").textContent=`${dateLabel(d)}, from space`;
-  $("#spacesub").innerHTML=`${BYID[cur].name} outlined in white. The record shows <b>${fmt(s.H[d])}</b> VIIRS-equivalent detections here on this day${d===stats(cur).peakDay?", its single worst day":""}.`;
+  $("#spacesub").innerHTML=`${BYID[cur].name} outlined in white. The record shows <b>${fmt(s.H[d])}</b> VIIRS-equivalent detections here on this day${d===stats(cur).peakDay?", its single worst day":d===stats(cur).peakRecent?", its worst day since 2016":""}.`;
   $("#spacecap").textContent="";
 }
 
 /* ---------- evidence ---------- */
 function buildEvidence(){
   const m=META.model,ch=m.chosen,nv=m.naive,fl=m.floor;
-  $("#evlead").innerHTML=`From ${META.s0_date.slice(0,4)} to ${META.last_date.slice(0,4)} both sensors watched the same fires. That overlap is the answer key. For each of its ${m.overlap_years.length} years we hid the VIIRS data, rebuilt it from MODIS using only the other years, and checked the result against what VIIRS really saw.`;
+  $("#evlead").innerHTML=`From ${m.overlap_years[0]} to ${m.overlap_years[m.overlap_years.length-1]} both sensors watched the same fires. That overlap is the answer key. For each of its ${m.overlap_years.length} years we hid the VIIRS data, rebuilt it from MODIS using only the other years, and checked the result against what VIIRS really saw.`;
   // scatter
   {const sc=META.scatter,W=560,Hh=430,ml=66,mr=14,mt=12,mb=40,host=$("#scatter");const svg=S("svg",{viewBox:`0 0 ${W} ${Hh}`,role:"img"});host.append(svg);
    const mx=Math.max(...sc.act,...sc.pred),lmax=Math.ceil(Math.log10(mx+1)),xs=v=>ml+(W-ml-mr)*Math.log10(v+1)/lmax,ys=v=>mt+(Hh-mt-mb)*(1-Math.log10(v+1)/lmax);
@@ -834,7 +841,7 @@ function buildMethod(){
    <li><b>Common grid.</b> Every detection is counted on a 0.1° grid, per day and per satellite.</li>
    <li><b>Common unit.</b> The record is expressed in what VIIRS on Suomi NPP reports, because VIIRS is the sensor family that continues after MODIS retires in 2027.</li>
    <li><b>Calibration.</b> In the ${m.overlap_years[0]} to ${m.overlap_years[m.overlap_years.length-1]} overlap, each ${m.chosen.zone.replace(" deg","°")} block gets its own ratio of VIIRS to MODIS detections${m.chosen.season==="int4"?", one for each of four burning intensities judged from MODIS alone":m.chosen.season==="s4"?", one per season":""}, shrunk toward the regional ratio when the block has few fires. ${m.candidates.length} model variants were compared on hidden years.</li>
-   <li><b>Rebuild.</b> Before ${dateLabel(META.s0)}, MODIS counts are multiplied by the local factor. Before Aqua launched (${dateLabel(META.a0)}), Terra alone gets its own factor.</li>
+   <li><b>Rebuild.</b> Before ${dateLabel(META.s0)}, MODIS counts are multiplied by the local factor. Before Aqua launched (${dateLabel(META.a0)}), Terra alone gets its own factor.${META.j_fill_from?` After Suomi NPP's last day, ${dateLabel(META.s_end)}, NOAA-20 carries the record on; the two agree to within 1% on totals.`:""}</li>
    <li><b>Uncertainty.</b> The spread of hold-out errors for each area becomes the 90% range drawn on rebuilt years. It is widened ${META.terra_inflation?META.terra_inflation.toFixed(1)+"×":""} for 2001, when only Terra was flying.</li>
    <li><b>Limits.</b> Fires too small or too cool for MODIS on a given day cannot be placed on that day; the factor restores them in totals, not in timing. Cloud and thick smoke hide fires from both sensors.</li></ul></div>
   <div><h3>NASA data used</h3><ul>
