@@ -73,5 +73,5 @@ Limits: fires too small or too cool for MODIS on a given day are restored in tot
 
 ## Team and tools
 
-Solo entry by Yi Hang. Static site: HTML, CSS and JavaScript with no framework. Analysis: Python (pandas, NumPy, SciPy, Shapely).
+Team **Thirteen Thirty**: solo entry by Yi Hang. The name is the local time, 13:30, at which Aqua MODIS and VIIRS both pass overhead: the one moment each day the old sensor and the new one see the same fires. Static site: HTML, CSS and JavaScript with no framework. Analysis: Python (pandas, NumPy, SciPy, Shapely).
 **Use of SI (AI) tools.** The code, the data analysis and the text of this project were produced with Claude (Anthropic), an AI assistant, under the author's direction. No SI-generated images, video or audio are used; every chart is drawn by code from NASA data. Every figure on the site is computed from the data above by the scripts in this repository.
