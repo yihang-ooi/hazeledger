@@ -1,3 +1,4 @@
+# SI disclosure: the code, the data analysis and the text of this project were produced with Claude (Anthropic), an AI assistant, under the author's direction. No SI-generated images, video or audio are used; every chart is drawn by code from NASA data.
 """
 harmonise.py - turn per-satellite daily grids into one consistent fire record.
 
@@ -478,6 +479,7 @@ manifest = json.load(open(os.path.join(DATA, "manifest.json"))) if os.path.exist
 for r in regions:
     r["sigma_log"] = round(float(sig[r["id"]]), 3)
 meta = dict(
+    si_disclosure="SI disclosure: the code, the data analysis and the text of this project were produced with Claude (Anthropic), an AI assistant, under the author's direction. No SI-generated images, video or audio are used; every chart is drawn by code from NASA data.",
     built_utc=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
     synthetic=bool(os.environ.get("SYNTHETIC")),
     grid=dict(west=94.5, east=119.5, south=-6.0, north=7.5, res=0.1, nx=NX, ny=NY),

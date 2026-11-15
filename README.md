@@ -74,4 +74,4 @@ Limits: fires too small or too cool for MODIS on a given day are restored in tot
 ## Team and tools
 
 Solo entry by Yi Hang. Static site: HTML, CSS and JavaScript with no framework. Analysis: Python (pandas, NumPy, SciPy, Shapely).
-AI assistance: Claude (Anthropic) was used for code, analysis design and drafting. Every figure on the site is computed from the data above by the scripts in this repository.
+**Use of SI (AI) tools.** The code, the data analysis and the text of this project were produced with Claude (Anthropic), an AI assistant, under the author's direction. No SI-generated images, video or audio are used; every chart is drawn by code from NASA data. Every figure on the site is computed from the data above by the scripts in this repository.

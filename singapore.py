@@ -1,3 +1,4 @@
+# SI disclosure: the code, the data analysis and the text of this project were produced with Claude (Anthropic), an AI assistant, under the author's direction. No SI-generated images, video or audio are used; every chart is drawn by code from NASA data.
 """Singapore air quality vs the harmonised fire record. Inputs: NEA Historical 24-hr PSI (data.gov.sg) and
 NEA annual PM10 24-hr mean 99th percentile (data.gov.sg dataset d_dc29ecdc06f1f2b42c3dd06dd1ab8e6b)."""
 import sys, json, warnings, numpy as np, pandas as pd

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SI disclosure: the code, the data analysis and the text of this project were produced with Claude (Anthropic), an AI assistant, under the author's direction. No SI-generated images, video or audio are used; every chart is drawn by code from NASA data.
 """
 firms_fetch.py  -  NASA FIRMS archive downloader + aggregator
 =============================================================

@@ -1,3 +1,4 @@
+# SI disclosure: the code, the data analysis and the text of this project were produced with Claude (Anthropic), an AI assistant, under the author's direction. No SI-generated images, video or audio are used; every chart is drawn by code from NASA data.
 """Rasterise admin boundaries (geoBoundaries, CC BY 4.0) onto the 0.1 degree grid and write simplified outlines."""
 import json, sys, numpy as np
 from shapely.geometry import shape, box, mapping
