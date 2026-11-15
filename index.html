@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HazeLedger: one consistent fire record for Sumatra, Borneo and the Malay Peninsula</title>
-<meta name="description" content="25 years of NASA MODIS and VIIRS fire detections, harmonised into one record that survives the change of satellites.">
+<meta name="description" content="26 years of NASA MODIS and VIIRS fire detections, harmonised into one record that survives the change of satellites.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -156,7 +156,7 @@ footer{padding:56px 0 48px;font-size:13.5px;color:var(--ink3)}
   </header>
 
   <div class="hero">
-    <h1>25 years of fire, in one record that survives the satellites.</h1>
+    <h1>26 years of fire, in one record that survives the satellites.</h1>
     <div>
       <p id="herotext">Loading the record.</p>
       <div id="sample">Sample data. These numbers are synthetic placeholders used while building; they are not NASA data.</div>
@@ -334,17 +334,17 @@ const VIEWLAB={harm:"Harmonised record",naive:"Raw counts, stitched",modis:"MODI
 
 async function boot(){
   const [meta,main,geo,grid]=await Promise.all([
-    fetch("data/meta.json").then(r=>r.json()),
-    fetch("data/series_main.bin").then(r=>r.arrayBuffer()),
-    fetch("data/regions.geojson").then(r=>r.json()),
-    fetch("data/grid_annual.bin").then(r=>r.arrayBuffer())]);
+    fetch("meta.json").then(r=>r.json()),
+    fetch("series_main.bin").then(r=>r.arrayBuffer()),
+    fetch("regions.geojson").then(r=>r.json()),
+    fetch("grid_annual.bin").then(r=>r.arrayBuffer())]);
   META=meta;BUF.main=main;GEO=geo;GRID=new Uint8Array(grid);REG=meta.regions;D=meta.ndays;
   REG.forEach(r=>BYID[r.id]=r);
   EPOCH=Date.UTC(2000,0,1);
   for(let d=0;d<D;d++){const t=new Date(EPOCH+d*864e5);const y=t.getUTCFullYear();DAY.push({y,m:t.getUTCMonth(),dom:t.getUTCDate(),doy:Math.round((t-Date.UTC(y,0,1))/864e5)})}
   if(META.synthetic)$("#sample").style.display="block";
   const kall=(META.model.k_regional.tot_all??META.model.k_regional.D_all);
-  $("#herotext").innerHTML=`NASA has counted fires with MODIS since ${META.t0_date.slice(0,4)} and with the sharper VIIRS since ${META.s0_date.slice(0,4)}. Here VIIRS reports about <b>${kall.toFixed(1)} times</b> as many fires for the same burning, so the two records cannot be compared directly. HazeLedger joins them into one burning calendar, ${META.t0_date.slice(0,4)} to ${dateLabel(D-1)}, so anyone managing fire, land or haze can set this month against a quarter-century of history.`;
+  $("#herotext").innerHTML=`NASA has counted fires with MODIS since ${META.t0_date.slice(0,4)} and with the sharper VIIRS since ${META.s0_date.slice(0,4)}. Here VIIRS reports about <b>${kall.toFixed(1)} times</b> as many fires for the same burning, so the two records cannot be compared directly. HazeLedger joins them into one burning calendar, ${META.t0_date.slice(0,4)} to ${dateLabel(D-1)}, so anyone managing fire, land or haze can set this month against a 26 years of history.`;
   range={a:META.t0,b:D-1};
   const fi=$("#from"),ti=$("#to");fi.min=ti.min=iso(META.t0);fi.max=ti.max=iso(D-1);fi.value=iso(range.a);ti.value=iso(range.b);
   const setRange=()=>{let a=Math.round((Date.parse(fi.value)-EPOCH)/864e5),b=Math.round((Date.parse(ti.value)-EPOCH)/864e5);if(!(a===a)||!(b===b))return;a=Math.max(META.t0,Math.min(D-1,a));b=Math.max(META.t0,Math.min(D-1,b));if(a>b)[a,b]=[b,a];range={a,b};render()};
@@ -358,9 +358,9 @@ async function boot(){
   addEventListener("resize",()=>{clearTimeout(boot.t);boot.t=setTimeout(render,120)});
   const start=REG.find(r=>r.name==="Sumatra")||REG[0];
   select(start.id);
-  fetch("data/series_l2.bin").then(r=>r.arrayBuffer()).then(b=>{BUF.l2=b;fillSearch()});
+  fetch("series_l2.bin").then(r=>r.arrayBuffer()).then(b=>{BUF.l2=b;fillSearch()});
   fillSearch();
-  fetch("data/singapore.json").then(r=>r.ok?r.json():null).then(j=>{if(j)buildSingapore(j)}).catch(()=>{});
+  fetch("singapore.json").then(r=>r.ok?r.json():null).then(j=>{if(j)buildSingapore(j)}).catch(()=>{});
 }
 function series(id){
   if(SER[id])return SER[id];
@@ -675,7 +675,7 @@ function updateMapSel(){const r=BYID[cur],gs=$("#gsel");gs.innerHTML="";
 function hint(t){$("#maphint").textContent=t}
 async function loadGrids(){
   if(GR)return GR;hint("Loading the daily grid. This happens once.");
-  const [h,m]=await Promise.all(["grid_h.bin","grid_m.bin"].map(f=>fetch("data/"+f).then(r=>r.arrayBuffer())));
+  const [h,m]=await Promise.all(["grid_h.bin","grid_m.bin"].map(f=>fetch(""+f).then(r=>r.arrayBuffer())));
   const mk=b=>({off:new Uint32Array(b,0,D+1),rec:new Uint16Array(b,(D+1)*4)});return GR={h:mk(h),m:mk(m)};
 }
 async function selectBox(w,s_,e,n){
@@ -826,6 +826,7 @@ function buildMethod(){
    <li><b>Limits.</b> Fires too small or too cool for MODIS on a given day cannot be placed on that day; the factor restores them in totals, not in timing. Cloud and thick smoke hide fires from both sensors.</li></ul></div>
   <div><h3>NASA data used</h3><ul>
    <li><a target="_blank" rel="noopener" href="https://firms.modaps.eosdis.nasa.gov/country/">NASA FIRMS active fire archive</a>: MODIS Collection 6.1 (MCD14ML), VIIRS Suomi NPP 375 m (VNP14IMGT) and VIIRS NOAA-20 375 m (VJ114IMGT). ${fmt0.format(tot)} detections kept after filtering.</li>
+   ${META.recent&&META.recent.sensors&&META.recent.sensors.length?`<li><a target="_blank" rel="noopener" href="https://firms.modaps.eosdis.nasa.gov/api/area/">NASA FIRMS area API</a>: the same products from 1 January 2026 to ${dateLabel(D-1)}, standard processing where NASA has published it and near-real-time after that. Calibration and all hold-out tests use the archive years only.</li>`:""}
    <li><a target="_blank" rel="noopener" href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api">NASA GIBS</a>: MODIS true-colour imagery and thermal anomalies, loaded live for any day you click.</li>
    <li>Filters: ${p.filters?`${p.filters.type}; confidence ${p.filters.confidence}`:"vegetation fires only, nominal and high confidence"}. Volcanoes, gas flares and other static heat sources are excluded.</li>
    <li>Coverage: ${Object.entries(sn).map(([k,v])=>`${({T:"Terra",A:"Aqua",S:"Suomi NPP",J:"NOAA-20",K:"NOAA-21"})[k]} ${v.first.slice(0,4)} to ${v.last.slice(0,4)}`).join(", ")}.</li></ul>
